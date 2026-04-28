@@ -43,24 +43,41 @@ jobs:
       - name: Patch Driver for Kernel 4.9
         run: |
           FILE="rtl8188eus/os_dep/linux/ioctl_cfg80211.c"
-          python3 - <<'PYEOF'
-          import re
-          with open("rtl8188eus/os_dep/linux/ioctl_cfg80211.c", "r") as f:
-              content = f.read()
-          old = r'cfg80211_roamed\(dev,\s*bss,\s*pmlmepriv->assoc_req[^;]+;'
-          new = '''struct cfg80211_roam_info roam_info = {
-                      .bss = bss,
-                      .req_ie = pmlmepriv->assoc_req + sizeof(struct rtw_ieee80211_hdr_3addr) + 2,
-                      .req_ie_len = pmlmepriv->assoc_req_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 2,
-                      .resp_ie = pmlmepriv->assoc_rsp + sizeof(struct rtw_ieee80211_hdr_3addr) + 6,
-                      .resp_ie_len = pmlmepriv->assoc_rsp_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 6,
-                  };
-                  cfg80211_roamed(dev, &roam_info, GFP_ATOMIC);'''
-          result = re.sub(old, new, content, flags=re.DOTALL)
-          with open("rtl8188eus/os_dep/linux/ioctl_cfg80211.c", "w") as f:
-              f.write(result)
-          print("Patch done")
-          PYEOF
+          echo "--- Lines around cfg80211_roamed ---"
+          grep -n "cfg80211_roamed" $FILE
+          python3 << 'PYEOF'
+import re
+
+filepath = "rtl8188eus/os_dep/linux/ioctl_cfg80211.c"
+with open(filepath, "r") as f:
+    lines = f.readlines()
+
+# Find the cfg80211_roamed call block and replace it
+content = "".join(lines)
+
+# Pattern: matches the full multi-line cfg80211_roamed(...) call
+pattern = re.compile(
+    r'([ \t]*)cfg80211_roamed\s*\(\s*dev\s*,\s*bss\s*,(.*?)\)\s*;',
+    re.DOTALL
+)
+
+replacement = r'''\1{
+\1    struct cfg80211_roam_info roam_info = {
+\1        .bss = bss,\2
+\1    };
+\1    cfg80211_roamed(dev, &roam_info, GFP_ATOMIC);
+\1}'''
+
+new_content, count = re.subn(pattern, replacement, content)
+print(f"Replacements made: {count}")
+
+with open(filepath, "w") as f:
+    f.write(new_content)
+
+print("Patch complete")
+PYEOF
+          echo "--- After patch ---"
+          grep -n "cfg80211_roamed\|roam_info" $FILE | head -20
 
       - name: Prepare Kernel
         working-directory: kernel-source
