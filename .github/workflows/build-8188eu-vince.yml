@@ -42,8 +42,25 @@ jobs:
 
       - name: Patch Driver for Kernel 4.9
         run: |
-          sed -i 's/cfg80211_roamed(dev, &roam_info, GFP_ATOMIC)/cfg80211_roamed(dev, roam_info.bss, roam_info.req_ie, roam_info.req_ie_len, roam_info.resp_ie, roam_info.resp_ie_len, GFP_ATOMIC)/g' rtl8188eus/os_dep/linux/ioctl_cfg80211.c
-          echo "Patch applied"
+          FILE="rtl8188eus/os_dep/linux/ioctl_cfg80211.c"
+          python3 - <<'PYEOF'
+          import re
+          with open("rtl8188eus/os_dep/linux/ioctl_cfg80211.c", "r") as f:
+              content = f.read()
+          old = r'cfg80211_roamed\(dev,\s*bss,\s*pmlmepriv->assoc_req[^;]+;'
+          new = '''struct cfg80211_roam_info roam_info = {
+                      .bss = bss,
+                      .req_ie = pmlmepriv->assoc_req + sizeof(struct rtw_ieee80211_hdr_3addr) + 2,
+                      .req_ie_len = pmlmepriv->assoc_req_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 2,
+                      .resp_ie = pmlmepriv->assoc_rsp + sizeof(struct rtw_ieee80211_hdr_3addr) + 6,
+                      .resp_ie_len = pmlmepriv->assoc_rsp_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 6,
+                  };
+                  cfg80211_roamed(dev, &roam_info, GFP_ATOMIC);'''
+          result = re.sub(old, new, content, flags=re.DOTALL)
+          with open("rtl8188eus/os_dep/linux/ioctl_cfg80211.c", "w") as f:
+              f.write(result)
+          print("Patch done")
+          PYEOF
 
       - name: Prepare Kernel
         working-directory: kernel-source
