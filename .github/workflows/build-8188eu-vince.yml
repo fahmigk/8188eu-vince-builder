@@ -1,0 +1,109 @@
+name: Build 8188eu.ko for Vince (Neophyte 4.9)
+
+on:
+  workflow_dispatch:
+    inputs:
+      KERNEL_REPO:
+        description: 'Kernel source repo (owner/repo)'
+        required: true
+        default: 'GhostMaster69-dev/android_kernel_xiaomi_vince'
+      KERNEL_BRANCH:
+        description: 'Kernel branch'
+        required: true
+        default: 'master'
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    env:
+      ARCH: arm64
+      SUBARCH: arm64
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y git bc bison flex libssl-dev make libelf-dev python3 zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+
+      - name: Clone Kernel Source
+        run: |
+          git clone --depth=1 -b ${{ github.event.inputs.KERNEL_BRANCH }} https://github.com/${{ github.event.inputs.KERNEL_REPO }} kernel-source
+
+      - name: Download Toolchains
+        run: |
+          mkdir -p toolchain
+          git clone --depth=1 -b master https://github.com/kdrag0n/proton-clang toolchain/proton-clang
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 toolchain/gcc64
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 toolchain/gcc32
+
+      - name: Clone RTL8188EUS Driver
+        run: |
+          git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus rtl8188eus
+
+      - name: Patch Driver for Kernel 4.9
+        run: python3 patch_driver.py
+
+      - name: Prepare Kernel
+        working-directory: kernel-source
+        run: |
+          export PATH="${GITHUB_WORKSPACE}/toolchain/proton-clang/bin:${GITHUB_WORKSPACE}/toolchain/gcc64/bin:${GITHUB_WORKSPACE}/toolchain/gcc32/bin:$PATH"
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=aarch64-linux-android-
+          export CROSS_COMPILE_ARM32=arm-linux-androideabi-
+          export CC=clang
+          export CLANG_TRIPLE=aarch64-linux-gnu-
+          export LD=ld.lld
+          export AR=llvm-ar
+          export NM=llvm-nm
+          export OBJCOPY=llvm-objcopy
+          if [ -f "arch/arm64/configs/vince_defconfig" ]; then
+            DEFCONF=vince_defconfig
+          elif [ -f "arch/arm64/configs/vince-perf_defconfig" ]; then
+            DEFCONF=vince-perf_defconfig
+          else
+            ls arch/arm64/configs/ | grep -i vince
+            exit 1
+          fi
+          echo "Using: $DEFCONF"
+          make O=../out ARCH=arm64 $DEFCONF
+          ./scripts/config --file ../out/.config -e MODULES -e MODULE_FORCE_LOAD -e MODULE_UNLOAD -e MODULE_FORCE_UNLOAD -e CFG80211_WEXT -e MAC80211 -e USB_SUPPORT -e USB -e USB_UAS
+          make O=../out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- olddefconfig
+          make O=../out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- -j$(nproc) modules_prepare
+
+      - name: Build 8188eu.ko
+        working-directory: rtl8188eus
+        run: |
+          export PATH="${GITHUB_WORKSPACE}/toolchain/proton-clang/bin:${GITHUB_WORKSPACE}/toolchain/gcc64/bin:${GITHUB_WORKSPACE}/toolchain/gcc32/bin:$PATH"
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- KSRC="${GITHUB_WORKSPACE}/out" CONFIG_COMPAT=y M=$(pwd) modules
+          ls -lh 8188eu.ko
+
+      - name: Verify Module
+        run: |
+          file rtl8188eus/8188eu.ko
+          strings rtl8188eus/8188eu.ko | grep -i vermagic || true
+
+      - name: Package Zip
+        run: |
+          git clone --depth=1 https://github.com/osm0sis/AnyKernel3 anykernel
+          mkdir -p anykernel/modules/system/lib/modules
+          cp rtl8188eus/8188eu.ko anykernel/modules/system/lib/modules/
+          cd anykernel
+          zip -r9 ../8188eu-vince-$(date +%Y%m%d).zip * -x ".git*" -x "*.md"
+
+      - name: Upload 8188eu.ko
+        uses: actions/upload-artifact@v4
+        with:
+          name: 8188eu-ko-vince
+          path: rtl8188eus/8188eu.ko
+          retention-days: 30
+
+      - name: Upload Flashable Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: 8188eu-flashable-zip-vince
+          path: 8188eu-vince-*.zip
+          retention-days: 30
