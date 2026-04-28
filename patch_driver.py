@@ -1,18 +1,8 @@
-import re
-
 filepath = "rtl8188eus/os_dep/linux/ioctl_cfg80211.c"
 with open(filepath, "r") as f:
     lines = f.readlines()
 
-print(f"Total lines: {len(lines)}")
-
-# Find and show lines around cfg80211_roamed
-for i, line in enumerate(lines):
-    if "cfg80211_roamed" in line:
-        print(f"Line {i+1}: {repr(line)}")
-
-# Find the old-style multi-arg cfg80211_roamed call
-# It starts with cfg80211_roamed(padapter->pnetdev and ends with , GFP_ATOMIC);
+# Find old-style multi-arg cfg80211_roamed call
 start = None
 end = None
 for i, line in enumerate(lines):
@@ -24,12 +14,16 @@ for i, line in enumerate(lines):
 
 if start is not None and end is not None:
     print(f"Found old call from line {start+1} to {end+1}")
-    print("Old content:")
-    for l in lines[start:end+1]:
-        print(repr(l))
-    # Replace with new single line
-    new_line = "\t\tcfg80211_roamed(padapter->pnetdev, &roam_info, GFP_ATOMIC);\n"
-    lines[start:end+1] = [new_line]
+    new_lines = [
+        "\t\tstruct cfg80211_roam_info roam_info = {};\n",
+        "\t\troam_info.bssid = cur_network->network.MacAddress;\n",
+        "\t\troam_info.req_ie = pmlmepriv->assoc_req + sizeof(struct rtw_ieee80211_hdr_3addr) + 2;\n",
+        "\t\troam_info.req_ie_len = pmlmepriv->assoc_req_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 2;\n",
+        "\t\troam_info.resp_ie = pmlmepriv->assoc_rsp + sizeof(struct rtw_ieee80211_hdr_3addr) + 6;\n",
+        "\t\troam_info.resp_ie_len = pmlmepriv->assoc_rsp_len - sizeof(struct rtw_ieee80211_hdr_3addr) - 6;\n",
+        "\t\tcfg80211_roamed(padapter->pnetdev, &roam_info, GFP_ATOMIC);\n",
+    ]
+    lines[start:end+1] = new_lines
     print("Replaced successfully")
 else:
     print("WARNING: Could not find old-style call")
