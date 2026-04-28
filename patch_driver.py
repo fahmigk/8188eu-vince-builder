@@ -2,16 +2,39 @@ import re
 
 filepath = "rtl8188eus/os_dep/linux/ioctl_cfg80211.c"
 with open(filepath, "r") as f:
-    content = f.read()
+    lines = f.readlines()
 
-old = r'cfg80211_roamed\(padapter->pnetdev\s*\n#if LINUX_VERSION_CODE > KERNEL_VERSION\(2, 6, 39\) \|\| defined\(COMPAT_KERNEL_RELEASE\)\s*\n, notify_channel\s*\n#endif\s*\n, cur_network->network\.MacAddress\s*\n, pmlmepriv->assoc_req \+ sizeof\(struct rtw_ieee80211_hdr_3addr\) \+ 2\s*\n, pmlmepriv->assoc_req_len - sizeof\(struct rtw_ieee80211_hdr_3addr\) - 2\s*\n, pmlmepriv->assoc_rsp \+ sizeof\(struct rtw_ieee80211_hdr_3addr\) \+ 6\s*\n, pmlmepriv->assoc_rsp_len - sizeof\(struct rtw_ieee80211_hdr_3addr\) - 6\s*\n, GFP_ATOMIC\);'
+print(f"Total lines: {len(lines)}")
 
-new = 'cfg80211_roamed(padapter->pnetdev, &roam_info, GFP_ATOMIC);'
+# Find and show lines around cfg80211_roamed
+for i, line in enumerate(lines):
+    if "cfg80211_roamed" in line:
+        print(f"Line {i+1}: {repr(line)}")
 
-result, count = re.subn(old, new, content)
-print(f"Replacements: {count}")
+# Find the old-style multi-arg cfg80211_roamed call
+# It starts with cfg80211_roamed(padapter->pnetdev and ends with , GFP_ATOMIC);
+start = None
+end = None
+for i, line in enumerate(lines):
+    if "cfg80211_roamed(padapter->pnetdev" in line and "&roam_info" not in line:
+        start = i
+    if start is not None and ", GFP_ATOMIC);" in line and i > start:
+        end = i
+        break
+
+if start is not None and end is not None:
+    print(f"Found old call from line {start+1} to {end+1}")
+    print("Old content:")
+    for l in lines[start:end+1]:
+        print(repr(l))
+    # Replace with new single line
+    new_line = "\t\tcfg80211_roamed(padapter->pnetdev, &roam_info, GFP_ATOMIC);\n"
+    lines[start:end+1] = [new_line]
+    print("Replaced successfully")
+else:
+    print("WARNING: Could not find old-style call")
 
 with open(filepath, "w") as f:
-    f.write(result)
+    f.writelines(lines)
 
 print("Done")
