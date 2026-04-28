@@ -11,14 +11,6 @@ on:
         description: 'Kernel branch'
         required: true
         default: 'master'
-      DRIVER_REPO:
-        description: 'RTL8188EUS driver repo'
-        required: true
-        default: 'aircrack-ng/rtl8188eus'
-      DRIVER_BRANCH:
-        description: 'Driver branch'
-        required: true
-        default: 'v5.3.9'
 
 jobs:
   build:
@@ -36,7 +28,6 @@ jobs:
       - name: Clone Kernel Source
         run: |
           git clone --depth=1 -b ${{ github.event.inputs.KERNEL_BRANCH }} https://github.com/${{ github.event.inputs.KERNEL_REPO }} kernel-source
-          echo "Kernel source cloned"
 
       - name: Download Toolchains
         run: |
@@ -44,7 +35,15 @@ jobs:
           git clone --depth=1 -b master https://github.com/kdrag0n/proton-clang toolchain/proton-clang
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9 toolchain/gcc64
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_arm_arm-linux-androideabi-4.9 toolchain/gcc32
-          echo "All toolchains ready"
+
+      - name: Clone RTL8188EUS Driver
+        run: |
+          git clone --depth=1 -b v5.3.9 https://github.com/aircrack-ng/rtl8188eus rtl8188eus
+
+      - name: Patch Driver for Kernel 4.9
+        run: |
+          sed -i 's/cfg80211_roamed(dev, &roam_info, GFP_ATOMIC)/cfg80211_roamed(dev, roam_info.bss, roam_info.req_ie, roam_info.req_ie_len, roam_info.resp_ie, roam_info.resp_ie_len, GFP_ATOMIC)/g' rtl8188eus/os_dep/linux/ioctl_cfg80211.c
+          echo "Patch applied"
 
       - name: Prepare Kernel
         working-directory: kernel-source
@@ -74,10 +73,6 @@ jobs:
           make O=../out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- olddefconfig
           make O=../out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- -j$(nproc) modules_prepare
           echo "modules_prepare done"
-
-      - name: Clone RTL8188EUS Driver
-        run: |
-          git clone --depth=1 -b ${{ github.event.inputs.DRIVER_BRANCH }} https://github.com/${{ github.event.inputs.DRIVER_REPO }} rtl8188eus
 
       - name: Build 8188eu.ko
         working-directory: rtl8188eus
