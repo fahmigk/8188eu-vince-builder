@@ -60,8 +60,6 @@ jobs:
           export AR=llvm-ar
           export NM=llvm-nm
           export OBJCOPY=llvm-objcopy
-          export OBJDUMP=llvm-objdump
-          export STRIP=llvm-strip
           if [ -f "arch/arm64/configs/vince_defconfig" ]; then
             DEFCONF=vince_defconfig
           elif [ -f "arch/arm64/configs/vince-perf_defconfig" ]; then
@@ -85,7 +83,7 @@ jobs:
         working-directory: rtl8188eus
         run: |
           export PATH="${GITHUB_WORKSPACE}/toolchain/proton-clang/bin:${GITHUB_WORKSPACE}/toolchain/gcc64/bin:${GITHUB_WORKSPACE}/toolchain/gcc32/bin:$PATH"
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- KSRC="${GITHUB_WORKSPACE}/kernel-source" CONFIG_COMPAT=y M=$(pwd) modules
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- KSRC="${GITHUB_WORKSPACE}/out" CONFIG_COMPAT=y M=$(pwd) modules
           ls -lh 8188eu.ko
 
       - name: Verify Module
