@@ -56,6 +56,12 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-androideabi-
           export CC=clang
           export CLANG_TRIPLE=aarch64-linux-gnu-
+          export LD=ld.lld
+          export AR=llvm-ar
+          export NM=llvm-nm
+          export OBJCOPY=llvm-objcopy
+          export OBJDUMP=llvm-objdump
+          export STRIP=llvm-strip
           if [ -f "arch/arm64/configs/vince_defconfig" ]; then
             DEFCONF=vince_defconfig
           elif [ -f "arch/arm64/configs/vince-perf_defconfig" ]; then
@@ -67,8 +73,8 @@ jobs:
           echo "Using: $DEFCONF"
           make O=../out ARCH=arm64 $DEFCONF
           ./scripts/config --file ../out/.config -e MODULES -e MODULE_FORCE_LOAD -e MODULE_UNLOAD -e MODULE_FORCE_UNLOAD -e CFG80211_WEXT -e MAC80211 -e USB_SUPPORT -e USB -e USB_UAS
-          make O=../out ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- olddefconfig
-          make O=../out ARCH=arm64 CC=clang CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- -j$(nproc) modules_prepare
+          make O=../out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- olddefconfig
+          make O=../out ARCH=arm64 CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- CROSS_COMPILE=aarch64-linux-android- CROSS_COMPILE_ARM32=arm-linux-androideabi- -j$(nproc) modules_prepare
           echo "modules_prepare done"
 
       - name: Clone RTL8188EUS Driver
@@ -79,7 +85,7 @@ jobs:
         working-directory: rtl8188eus
         run: |
           export PATH="${GITHUB_WORKSPACE}/toolchain/proton-clang/bin:${GITHUB_WORKSPACE}/toolchain/gcc64/bin:${GITHUB_WORKSPACE}/toolchain/gcc32/bin:$PATH"
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang CLANG_TRIPLE=aarch64-linux-gnu- KSRC="${GITHUB_WORKSPACE}/kernel-source" CONFIG_COMPAT=y M=$(pwd) modules
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- CC=clang LD=ld.lld AR=llvm-ar NM=llvm-nm OBJCOPY=llvm-objcopy CLANG_TRIPLE=aarch64-linux-gnu- KSRC="${GITHUB_WORKSPACE}/kernel-source" CONFIG_COMPAT=y M=$(pwd) modules
           ls -lh 8188eu.ko
 
       - name: Verify Module
